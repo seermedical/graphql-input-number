@@ -2,7 +2,6 @@ import {GraphQLScalarType} from 'graphql';
 import {GraphQLError} from 'graphql/error';
 import {Kind} from 'graphql/language';
 
-
 // https://github.com/graphql/graphql-js/blob/master/src/type/scalars.js
 const MAX_INT = 2147483647;
 const MIN_INT = -2147483648;
@@ -50,24 +49,30 @@ export default ({
   }
 
   const parseValue = (value, ast) => {
-    value = coerceInt(value);
+    // Throw on non-integer
+    const throwOnNull = () => error({
+      type: 'input',
+      value,
+      max,
+      message: `Expected integer`,
+      ast,
+    })
+
+    // Coerce value to integer
+    value = coerceInt(value)
     if (value == null) {
-      return null;
+      throwOnNull()
     }
 
-
     // Sanitization Phase
-
     if (sanitize) {
-      value = sanitize(value);
+      value = sanitize(value)
       if (!isSafeInteger(value)) {
-        return null;
+        throwOnNull()
       }
     }
 
-
     // Validation Phase
-
     if (min != null && value < min) {
       return error({
         type: 'min',
@@ -99,12 +104,16 @@ export default ({
 
 
     // Parse Phase
-
     if (parse) {
       return parse(value);
     }
 
-    return value;
+    // If value is null at this point, throw
+    if (value === null) {
+      throwOnNull()
+    } else {
+      return value
+    }
   };
 
   return new GraphQLScalarType({
@@ -114,9 +123,16 @@ export default ({
     parseLiteral(ast) {
       const {kind, value} = ast;
       if (kind === Kind.INT) {
-        return parseValue(value, ast);
+        return parseValue(value, ast)
+      } else {
+        return error({
+          type: 'input',
+          value,
+          max,
+          message: `Expected integer`,
+          ast,
+        })
       }
-      return null;
     },
     ...options,
   });
